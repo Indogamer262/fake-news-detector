@@ -36,7 +36,17 @@ class Tokenizer:
     @classmethod
     def from_json_file(cls, path=WORD_INDEX_PATH, num_words=NUM_WORDS, oov_token=OOV_TOKEN):
         with open(path, "r", encoding="utf-8") as f:
-            word_index = json.load(f)
+            data = json.load(f)
+
+        if isinstance(data, str):
+            data = json.loads(data)
+
+        if isinstance(data, dict) and data.get("class_name") == "Tokenizer" and "config" in data:
+            word_index_raw = data["config"].get("word_index", "{}")
+            word_index = json.loads(word_index_raw) if isinstance(word_index_raw, str) else word_index_raw
+        else:
+            word_index = data
+
         return cls(word_index, num_words=num_words, oov_token=oov_token)
 
     def text_to_sequence(self, text):

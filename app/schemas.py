@@ -17,6 +17,18 @@ class PredictRequest(BaseModel):
         return self
 
 
+class VerifyRequest(BaseModel):
+    title: str = ""
+    text: str = ""
+    translate: bool = True
+
+    @model_validator(mode="after")
+    def _at_least_one(self):
+        if not (self.title.strip() or self.text.strip()):
+            raise ValueError("Provide at least one of 'title' or 'text'.")
+        return self
+
+
 class NewsItem(BaseModel):
     title: str = ""
     text: str = ""

@@ -78,12 +78,17 @@ def _llm_summary(claim: str, sources: List[Source]) -> Optional[str]:
         return None
 
 
-def verify_claim(claim: str, max_results: int = VERIFY_MAX_RESULTS) -> Verification:
+def verify_claim(
+    claim: str,
+    original_claim: Optional[str] = None,
+    max_results: int = VERIFY_MAX_RESULTS,
+) -> Verification:
     claim = (claim or "").strip()
     if not claim:
         return Verification(checked=False, method="none")
 
-    query = claim if len(claim) <= 300 else claim[:300]
+    search_query = (original_claim or claim).strip()
+    query = search_query if len(search_query) <= 300 else search_query[:300]
     sources = _search(query, max_results)
     if not sources:
         return Verification(
