@@ -100,5 +100,5 @@ def verify_claim(
     summary = _llm_summary(claim, sources)
     method = "search+llm" if summary else "search"
     if not summary:
-        summary = "Compare the claim against the sources below to assess its accuracy."
+        summary = "Compare the claim against the sources below to assess its accuracy. explain in the input source language"
     return Verification(checked=True, method=method, summary=summary, sources=sources)
