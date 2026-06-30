@@ -14,8 +14,8 @@ MODEL_PATH = MODELS_DIR / "model.onnx"
 WORD_INDEX_PATH = MODELS_DIR / "tokenizer_word_index.json"
 
 # --- Keras Tokenizer / training hyperparameters (from the notebook) ---
-NUM_WORDS = 10000          # max_features
-MAXLEN = 200               # maxlen
+NUM_WORDS = 25000          # max_features
+MAXLEN = 500               # maxlen
 OOV_TOKEN = None           # the notebook used no oov_token
 # Keras default Tokenizer filters (every char here is replaced with a space):
 PAD_FILTERS = '!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n'

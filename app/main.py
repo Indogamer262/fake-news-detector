@@ -21,6 +21,8 @@ from .schemas import (
     NewsItem,
     PredictRequest,
     PredictResponse,
+    Verification,
+    VerifyRequest,
 )
 
 logger = logging.getLogger("welfake")
@@ -91,7 +93,7 @@ def _run_pipeline(title: str, text: str, translate: bool, verify: bool) -> Predi
 
     verification = None
     if verify and label == VERIFY_ON_LABEL:
-        verification = verify_claim(used_text or combined)
+        verification = verify_claim(used_text or combined, original_claim=combined)
 
     return PredictResponse(
         label=label,
@@ -124,6 +126,16 @@ async def health():
 async def predict(req: PredictRequest):
     _ensure_ready()
     return _run_pipeline(req.title, req.text, req.translate, req.verify)
+
+
+@app.post("/api/verify", response_model=Verification)
+async def verify(req: VerifyRequest):
+    _ensure_ready()
+    combined = f"{req.title or ''} {req.text or ''}".strip()
+    used_text = combined
+    if req.translate:
+        used_text, _, _ = translate_to_english(combined)
+    return verify_claim(used_text or combined, original_claim=combined)
 
 
 @app.post("/api/predict/batch", response_model=BatchResponse)

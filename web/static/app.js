@@ -66,6 +66,15 @@ function resultCard(d) {
         <p class="text-sm text-slate-300 mb-3">${esc(v.summary || "")}</p>
         <div class="space-y-2">${sources || '<p class="text-xs text-slate-500">No sources returned.</p>'}</div>
       </div>`;
+  } else {
+    const msg = fake ? "Want to verify?" : "Having trust issue?";
+    verify = `
+      <div id="verify-section" class="mt-4 pt-4 border-t border-slate-800 flex flex-col items-center">
+        <div class="text-sm text-slate-400 mb-3">${msg}</div>
+        <button id="btn-manual-verify" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition border border-slate-700">
+          Verify using Web Search
+        </button>
+      </div>`;
   }
 
   return `
@@ -111,6 +120,32 @@ $("analyze").addEventListener("click", async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Request failed");
     box.innerHTML = resultCard(data);
+
+    const btnVerify = $("btn-manual-verify");
+    if (btnVerify) {
+      btnVerify.addEventListener("click", async () => {
+        const vSec = $("verify-section");
+        vSec.innerHTML = `<div class="text-sm text-slate-400 animate-pulse text-center">Running verification…</div>`;
+        try {
+          const vRes = await fetch("/api/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: $("title").value,
+              text: $("text").value,
+              translate: $("translate").checked
+            })
+          });
+          const vData = await vRes.json();
+          if (!vRes.ok) throw new Error(vData.detail || "Verify failed");
+          data.verification = vData;
+          box.innerHTML = resultCard(data);
+        } catch (ve) {
+          vSec.innerHTML = `<div class="text-sm text-rose-400 text-center">⚠️ ${esc(ve.message)}</div>`;
+        }
+      });
+    }
+
   } catch (e) {
     box.innerHTML = `<div class="text-sm text-rose-400 p-4 border border-rose-500/30 rounded-xl bg-rose-500/5">⚠️ ${esc(e.message)}</div>`;
   } finally {
