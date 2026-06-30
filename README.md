@@ -1,7 +1,7 @@
 # WELFake — Fake-News Detector (FastAPI + Agentic AI)
 
 A web app and JSON API around the LSTM fake-news classifier trained in
-`Compute (1).ipynb` (WELFake dataset, exported to `models/model.onnx`).
+`Compute.ipynb` (WELFake dataset, exported to `models/model.onnx`).
 
 It wraps the model in a **two-agent pipeline** and a Tailwind UI:
 
@@ -39,15 +39,12 @@ source .venv/Scripts/activate     # Git Bash / MINGW64  (note: forward slashes +
 # 3. Install dependencies (no TensorFlow needed)
 pip install -r requirements.txt
 
-# 4. Build the tokenizer from the WELFake CSV (see "Tokenizer" below)
-python scripts/build_tokenizer.py --csv "path/to/WELFake_Dataset.csv.zip"
-
-# 5. Run the app
+# 4. Run the app
 uvicorn app.main:app --port 8000 --reload
 ```
 
 > **Already set up on this machine** — the `.venv`, dependencies, and
-> `models/tokenizer_word_index.json` exist, so you can skip steps 1, 3, and 4 and just
+> `models/tokenizer_word_index.json` exist, so you can skip steps 1 and 3 and just
 > activate + run. If you're in **Git Bash** and don't want to activate, run directly:
 > `.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000 --reload`
 
@@ -91,11 +88,7 @@ else `REAL`; `confidence` is the distance from 0.5. Configurable in `app/config.
 
 ## The tokenizer (important)
 
-`model.onnx` needs the exact Keras `Tokenizer` (`num_words=10000`, `maxlen=200`)
-that it was trained with — but that tokenizer was **not** exported from the notebook.
-`scripts/build_tokenizer.py` regenerates the identical `word_index` directly from the
-WELFake CSV in pure Python (no TensorFlow), because Keras' `fit_on_texts` is
-deterministic given the same data and cleaning steps.
+`model.onnx` needs the exact Keras `Tokenizer` (`num_words=25000`, `maxlen=500`) that it was trained with. The tokenizer is exported directly by the notebook as `models/tokenizer_word_index.json` and loaded at startup.
 
 ---
 
@@ -114,7 +107,6 @@ app/
 web/
   templates/index.html   Tailwind single-page UI
   static/app.js          fetch + rendering
-scripts/build_tokenizer.py   reproduce tokenizer_word_index.json from the CSV
 tests/test_preprocessing.py  Keras-parity + notebook-prediction tests
 ```
 

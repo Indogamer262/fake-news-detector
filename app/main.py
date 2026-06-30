@@ -73,8 +73,8 @@ def _ensure_ready():
     if state.get("tokenizer") is None:
         raise HTTPException(
             503,
-            "Tokenizer not loaded. Generate models/tokenizer_word_index.json "
-            "(see README / scripts/build_tokenizer.py).",
+            "Tokenizer not loaded. Place tokenizer_word_index.json in models/ "
+            "(see README).",
         )
 
 
