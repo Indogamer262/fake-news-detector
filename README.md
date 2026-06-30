@@ -1,128 +1,186 @@
 # WELFake — Fake-News Detector (FastAPI + Agentic AI)
 
-A web app and JSON API around the LSTM fake-news classifier trained in
-`Compute (1).ipynb` (WELFake dataset, exported to `models/model.onnx`).
+A complete web application and JSON API constructed around the LSTM fake-news classifier trained on the WELFake dataset (72k articles). The trained model has been exported to `models/model.onnx`.
 
-It wraps the model in a **two-agent pipeline** and a Tailwind UI:
-
-```
-title + text  →  Translator agent → preprocess  →  ONNX LSTM
-              →  classify  →  Verification agent (only if FAKE)  →  result
-```
-
-* **Translator agent** — auto-detects non-English input (e.g. Indonesian) and
-  translates it to English before classifying (handles long articles via chunking).
-* **Verification agent** — when a story is flagged **FAKE**, it calls a web search
-  (DuckDuckGo, no API key) to surface what reputable sources actually report.
-  If `GEMINI_API_KEY` is set, it also adds an LLM-written summary.
-
-This targets the assignment's **80+ "Model integration using Agentic AI"** tier:
-a model exposed as an API, with agents that pass results to one another.
+This project implements a multi-agent system that bridges a deep learning model with external APIs to classify text and verify claims in real-time.
 
 ---
 
-## Quick start
+## 🛠️ Architecture & Pipeline
 
-> Requirements already met on this machine: Python **3.14**, `.venv` created,
-> dependencies installed, `models/model.onnx` + `models/tokenizer_word_index.json`
-> in place. To reproduce from scratch:
+The system is designed with a **two-agent pipeline** and a Tailwind-styled single-page UI:
+
+```
+                  ┌───────────────────────┐
+                  │      Input Text       │
+                  └───────────┬───────────┘
+                              │
+                              ▼
+                  ┌───────────────────────┐
+                  │   Translator Agent    │ (Translate to English if needed)
+                  └───────────┬───────────┘
+                              │
+                              ▼
+                  ┌───────────────────────┐
+                  │ Preprocessing Layer   │ (Tokenize & Pad Sequence)
+                  └───────────┬───────────┘
+                              │
+                              ▼
+                  ┌───────────────────────┐
+                  │    ONNX LSTM Model    │ (Classify FAKE vs REAL)
+                  └───────────┬───────────┘
+                              │
+            ┌─────────────────┴─────────────────┐
+            ▼                                   ▼
+        [REAL]                               [FAKE]
+            │                                   │
+      (Optional)                                │
+┌───────────────────────┐             ┌─────────▼─────────────┐
+│  Verification Agent   │             │  Verification Agent   │ (Search in original
+│ (Triggered Manually)  │             │ (Triggered Auto/Man)  │  input language)
+└───────────────────────┘             └───────────────────────┘
+```
+
+1. **Translator Agent** (`app/agents/translator.py`): Automatically detects input language. If non-English (e.g., Indonesian) and auto-translation is enabled, it translates the text into English. For long articles exceeding 4,500 characters, it automatically chunks the article before translating to bypass Google Translate's size limitations.
+2. **Model Classification** (`app/inference.py`): Performs inference using `onnxruntime` on the processed tokens.
+3. **Verification Agent** (`app/agents/verifier.py`): If a story is flagged **FAKE** (or manually requested by the user), it queries DuckDuckGo for reputable sources. If an LLM API key (like `GEMINI_API_KEY`) is provided, it generates an LLM-written summary comparing the claim with the search results.
+
+---
+
+## ✨ Features and Enhancements
+
+* **Multilingual Web Search Querying**: The Verification Agent executes search queries in the **original language** of the input rather than its English translation. This improves retrieval effectiveness for local news stories.
+* **Flexible Tokenizer Loading**: The tokenizer loader is updated to handle both raw token-to-index dictionary files (e.g., `tokenizer_word_index.json.henry`) and fully-exported Keras Tokenizer configurations (which contains config values and stringified JSON dictionaries). It handles double-serialized JSON strings seamlessly.
+* **Interactive Manual Verification**: For cases where the model flags a story as `REAL` (or flags it as `FAKE` but auto-verification was disabled), the UI displays a call-to-action button allowing the user to run the verification agent manually:
+  * **REAL**: Shows *"Having trust issue?"* followed by a **[Verify using Web Search]** button.
+  * **FAKE** (with auto-verify disabled): Shows *"Want to verify?"* followed by a **[Verify using Web Search]** button.
+
+---
+
+## 📂 Project Layout & Core Files
+
+### Backend Components
+
+* **app/main.py**: The FastAPI server entry point. It sets up routes, manages startup configurations (loading the model and tokenizer), and orchestrates the inference/verification pipeline.
+* **app/config.py**: Central configuration holding hyperparameters (vocab size, max sequence length, decision threshold) and API credentials.
+* **app/preprocessing.py**: Pure-Python replication of the Keras text preprocessing pipeline (Tokenization, texts_to_sequences, and padding). Ensures exact byte-for-byte alignment with the training script without requiring a heavy TensorFlow dependency.
+* **app/inference.py**: Handles ONNX Runtime execution (`CpuExecutionProvider`) and maps raw sigmoid output probabilities to classification labels and confidence ratings.
+* **app/schemas.py**: Pydantic request/response structures enforcing strict validation for single/batch predictions and verification requests.
+* **app/agents/translator.py)**: Translator Agent implementation using `deep-translator` (Google Translate backend) and language auto-detection via `langdetect`.
+* **app/agents/verifier.py**: Verification Agent implementation utilizing `duckduckgo-search` (no API key required) and LLM summarization.
+
+### Frontend Components
+
+* **web/templates/index.html**: Simple, sleek Tailwind CSS Single-Page Application (SPA). Provides panels for both single prediction and batch predictions (JSON).
+* **web/static/app.js**: Handles user interaction, form submissions, asynchronous API calls to `/api/predict` and `/api/verify`, and dynamically renders the prediction cards and verification results.
+
+---
+
+## ⚡ Quick Start
+
+### Prerequisites
+* Python **3.14** (or 3.10+)
+* Model artifacts: `models/model.onnx` and `models/tokenizer_word_index.json` placed in their respective directory.
+
+### Running the Server
+
+If you are using the pre-configured virtual environment on this machine, activate it and start the development server:
 
 ```bash
-# 1. Create the virtual environment
-py -3.14 -m venv .venv
+# Activate virtual environment
+source .venv/bin/activate
 
-# 2. Activate it — pick the line for YOUR shell:
-.venv\Scripts\activate            # Windows CMD
-.venv\Scripts\Activate.ps1        # Windows PowerShell
-source .venv/Scripts/activate     # Git Bash / MINGW64  (note: forward slashes + `source`)
-
-# 3. Install dependencies (no TensorFlow needed)
-pip install -r requirements.txt
-
-# 4. Build the tokenizer from the WELFake CSV (see "Tokenizer" below)
-python scripts/build_tokenizer.py --csv "path/to/WELFake_Dataset.csv.zip"
-
-# 5. Run the app
+# Start the FastAPI server
 uvicorn app.main:app --port 8000 --reload
 ```
 
-> **Already set up on this machine** — the `.venv`, dependencies, and
-> `models/tokenizer_word_index.json` exist, so you can skip steps 1, 3, and 4 and just
-> activate + run. If you're in **Git Bash** and don't want to activate, run directly:
-> `.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000 --reload`
+Open [**http://localhost:8000**](http://localhost:8000) in your browser. You can access the interactive Swagger API documentation at [**http://localhost:8000/docs**](http://localhost:8000/docs).
 
-Then open **http://localhost:8000** (interactive API docs at `/docs`).
+### Running Tests
 
----
-
-## API
-
-| Method | Path | Body | Description |
-|--------|------|------|-------------|
-| `GET`  | `/` | — | Tailwind web UI |
-| `GET`  | `/health` | — | `{model_loaded, tokenizer_loaded, vocab_size}` |
-| `POST` | `/api/predict` | `{title, text, translate?, verify?}` | Single prediction |
-| `POST` | `/api/predict/batch?translate=&verify=` | `[{title, text}, ...]` | Batch (mirrors the notebook's JSON cell) |
+Unit tests are included to ensure preprocessing parity with Keras and check core classification outputs.
 
 ```bash
-curl -X POST http://localhost:8000/api/predict \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Breaking discovery","text":"New discovery found in the deep ocean.","verify":false}'
+python -m pytest tests/ -q
 ```
-
-Response:
-
-```json
-{
-  "label": "FAKE",
-  "probability": 0.9655,
-  "confidence": 0.9655,
-  "input_was_translated": false,
-  "detected_language": null,
-  "translated_text": null,
-  "verification": null
-}
-```
-
-**Decision rule** (matches the notebook's validated logic): `probability ≥ 0.5 → FAKE`,
-else `REAL`; `confidence` is the distance from 0.5. Configurable in `app/config.py`.
 
 ---
 
-## The tokenizer (important)
+## 📡 API Endpoints
 
-`model.onnx` needs the exact Keras `Tokenizer` (`num_words=10000`, `maxlen=200`)
-that it was trained with — but that tokenizer was **not** exported from the notebook.
-`scripts/build_tokenizer.py` regenerates the identical `word_index` directly from the
-WELFake CSV in pure Python (no TensorFlow), because Keras' `fit_on_texts` is
-deterministic given the same data and cleaning steps.
+### 1. Health Status
+* **Method**: `GET`
+* **Path**: `/health`
+* **Response**:
+  ```json
+  {
+    "status": "ok",
+    "model_loaded": true,
+    "tokenizer_loaded": true,
+    "vocab_size": 25000
+  }
+  ```
 
----
+### 2. Predict (Single)
+* **Method**: `POST`
+* **Path**: `/api/predict`
+* **Request Body**:
+  ```json
+  {
+    "title": "Breaking News Headline",
+    "text": "Full article text...",
+    "translate": true,
+    "verify": true
+  }
+  ```
+* **Response**:
+  ```json
+  {
+    "label": "REAL",
+    "probability": 0.034,
+    "confidence": 0.966,
+    "input_was_translated": false,
+    "detected_language": "en",
+    "translated_text": null,
+    "verification": null
+  }
+  ```
 
-## Project layout
+### 3. Verify Claim (Manual)
+* **Method**: `POST`
+* **Path**: `/api/verify`
+* **Request Body**:
+  ```json
+  {
+    "title": "Headline",
+    "text": "Text...",
+    "translate": true
+  }
+  ```
+* **Response**: Returns a `Verification` object containing:
+  ```json
+  {
+    "checked": true,
+    "method": "search",
+    "summary": "Compare the claim against the sources below to assess its accuracy.",
+    "sources": [
+      {
+        "title": "Reputable Source Article Title",
+        "url": "https://example.com/article",
+        "snippet": "Snippet containing relevant verification information..."
+      }
+    ]
+  }
+  ```
 
-```
-app/
-  main.py            FastAPI app, routes, startup model/tokenizer load
-  config.py          hyperparameters (must match the notebook)
-  preprocessing.py   pure-Python Keras tokenize + pad (train/serve parity)
-  inference.py       ONNX Runtime session + classify()
-  schemas.py         Pydantic request/response models
-  agents/
-    translator.py    Agent 1 — deep-translator auto→English
-    verifier.py      Agent 2 — DuckDuckGo search (+ optional Gemini LLM)
-web/
-  templates/index.html   Tailwind single-page UI
-  static/app.js          fetch + rendering
-scripts/build_tokenizer.py   reproduce tokenizer_word_index.json from the CSV
-tests/test_preprocessing.py  Keras-parity + notebook-prediction tests
-```
-
-Run tests with `python -m pytest tests/ -q`.
-
-## Notes
-* **Python 3.14**: the stack is intentionally TensorFlow-free (`onnxruntime` only),
-  which installs cleanly on 3.14. The UI is served via `FileResponse` (not Jinja2,
-  which currently has a 3.14 cache bug).
-* Optional LLM verification: copy `.env.example` to `.env` and set `GEMINI_API_KEY`.
-  Without it, the verifier still returns search sources.
+### 4. Batch Prediction
+* **Method**: `POST`
+* **Path**: `/api/predict/batch`
+* **Query Parameters**: `translate` (bool), `verify` (bool)
+* **Request Body**: An array of `NewsItem` objects:
+  ```json
+  [
+    { "title": "Headline 1", "text": "Content..." },
+    { "title": "Headline 2", "text": "Content..." }
+  ]
+  ```
